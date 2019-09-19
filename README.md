@@ -1,2 +1,2 @@
 # prebiotic
-epoch trial prebiotic arm
+epoch study - prebiotic trial
