@@ -1,0 +1,643 @@
+---
+title: "Krug_BYOD_Final"
+author: "Annemarie"
+date: "12/11/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+######### Visualization ########### Depression ## Anxiety ## Stress #########
+
+# Read in full data file (CON and PRE)
+read.table("prebiotic_end.csv", sep =",", header = TRUE, na.strings = ".") -> df
+
+# Depression boxplot
+library(ggplot2)
+theme_set(theme_bw())
+g <- ggplot(df, aes(x=factor(df$Treatment, levels=c('CON', 'PRE')), y=Depression))
+g + geom_boxplot() + 
+  geom_dotplot(binaxis='y', 
+               stackdir='center', 
+               dotsize = 1, 
+               fill="blue") +
+  theme(axis.text.x = element_text(angle=65, vjust=0.6)) + 
+  labs(title="Fig 1. Depression", 
+       x="Treatment",
+       y="Depression Score")
+```
+
+```{r}
+# Anxiety
+library(ggplot2)
+theme_set(theme_bw())
+g <- ggplot(df, aes(x=factor(df$Treatment, levels=c('CON', 'PRE')), y=Anxiety))
+g + geom_boxplot() + 
+  geom_dotplot(binaxis='y', 
+               stackdir='center', 
+               dotsize = 1, 
+               fill="green") +
+  theme(axis.text.x = element_text(angle=65, vjust=0.6)) + 
+  labs(title="Fig 2. Anxiety", 
+       x="Treatment",
+       y="Anxiety Score")
+```
+
+```{r}
+# Stress
+library(ggplot2)
+theme_set(theme_bw())
+g <- ggplot(df, aes(x=factor(df$Treatment, levels=c('CON', 'PRE')), y=Stress))
+g + geom_boxplot() + 
+  geom_dotplot(binaxis='y', 
+               stackdir='center', 
+               dotsize = 1, 
+               fill="purple") +
+  theme(axis.text.x = element_text(angle=65, vjust=0.6)) + 
+  labs(title="Fig 3. Stress", 
+       x="Treatment",
+       y="Stress Score")
+```
+
+
+```{r}
+######## Visualization ######## ERPs by image category and time window
+
+# Read in files
+read.table("dens.neu.6_8.csv", sep =",", header = TRUE, na.strings = ".") -> neu
+read.table("dens.pos.6_8.csv", sep =",", header = TRUE, na.strings = ".") -> pos
+read.table("dens.neg.6_8.csv", sep =",", header = TRUE, na.strings = ".") -> neg
+
+# neu
+library(lattice)
+densityplot(~ volt, group = trt_image, data = neu, auto.key = TRUE,
+            xlab = "Microvolts",
+            main = "Fig 4. Response to Neutral Images")
+
+# pos
+library(lattice)
+densityplot(~ volt, group = trt_image, data = pos, auto.key = TRUE,
+            xlab = "Microvolts",
+            main = "Fig 5. Response to Positive Images")
+
+# neg 6-8
+library(lattice)
+densityplot(~ volt, group = trt_image, data = neg, auto.key = TRUE,
+            xlab = "Microvolts",
+            main = "Fig 6. Response to Negative Images")
+```
+
+
+```{r}
+library(lattice)
+library(ggplot2)
+
+# CON: Read in data file
+read.table("epCON.csv", sep =",", header = TRUE, na.strings = "NA") -> epCON
+
+# CON: Predict depression and anxiety
+library(caret)
+Imp.par <- preProcess(epCON,method = c('knnImpute','nzv',"center","scale"))
+keepList<-c(
+  'ID',
+  'Period',
+  'Time',
+  'Treatment',
+  'Trt_time',
+  'Sex',
+  'BMI',
+  'BMI_code',
+  'pos_6_8',
+  'neg_6_8',
+  'neu_6_8',
+  'pos_10_12',
+  'neg_10_12',
+  'neu_10_12',
+  'Number',
+  'Depression',
+  'Depression_log',
+  'Anxiety',
+  'Anxiety_log',
+  'Stress',
+  'Stress_log',
+  'Bifidobacterium',
+  'Bifidobacterium_log',
+  'Bifidobacterium_asin',
+  'Bifidobacterium_2xasin',
+  'bif_pres'
+)
+
+data<-epCON[,which(colnames(epCON) %in% keepList)]
+d2<-data[,]
+
+d1<-na.action(data, na.rm)
+
+lm.dep<-lm(data= data, Depression ~ Anxiety)
+
+data$identifiers<-rownames(data)
+as.data.frame(predict(lm.dep))->nds
+nds$identifiers<-rownames(nds)
+
+merge(data,nds, by = "identifiers" )->d2
+
+
+lm.anx<-lm(data= d2, Anxiety ~ Depression )
+d2$identifiers<-rownames(d2)
+
+as.data.frame(predict(lm.anx))->ads
+ads$identifiers<-rownames(ads)
+
+merge(d2,ads, by = "identifiers" )->CON
+
+CON$Dep_Anx<-CON$`predict(lm.dep)` / CON$`predict(lm.anx)`
+
+
+IQR(data$Bifidobacterium)
+#[1] 0.02700839
+data$bif_pres <- ifelse(data$Bifidobacterium >= 0.027 ,1,0)
+
+
+Imp.par <- preProcess(data, method = c("center","scale"))
+data.imp <- caret::predict(data,Imp.par)
+```
+
+```{r}
+library(lattice)
+library(ggplot2)
+
+# PRE: Read in data file
+read.table("epPRE.csv", sep =",", header = TRUE, na.strings = "NA") -> epPRE
+
+# PRE: Predict depression and anxiety
+library(caret)
+Imp.par <- preProcess(epPRE,method = c('knnImpute','nzv',"center","scale"))
+keepList<-c(
+  'ID',
+  'Period',
+  'Time',
+  'Treatment',
+  'Trt_time',
+  'Sex',
+  'BMI',
+  'BMI_code',
+  'pos_6_8',
+  'neg_6_8',
+  'neu_6_8',
+  'pos_10_12',
+  'neg_10_12',
+  'neu_10_12',
+  'Number',
+  'Depression',
+  'Depression_log',
+  'Anxiety',
+  'Anxiety_log',
+  'Stress',
+  'Stress_log',
+  'Bifidobacterium',
+  'Bifidobacterium_log',
+  'Bifidobacterium_asin',
+  'Bifidobacterium_2xasin',
+  'bif_pres'
+)
+
+data<-epPRE[,which(colnames(epPRE) %in% keepList)]
+d2<-data[,]
+
+d1<-na.action(data, na.rm)
+
+lm.dep<-lm(data= data, Depression ~ Anxiety)
+
+data$identifiers<-rownames(data)
+as.data.frame(predict(lm.dep))->nds
+nds$identifiers<-rownames(nds)
+
+merge(data,nds, by = "identifiers" )->d2
+
+
+lm.anx<-lm(data= d2, Anxiety ~ Depression )
+d2$identifiers<-rownames(d2)
+
+as.data.frame(predict(lm.anx))->ads
+ads$identifiers<-rownames(ads)
+
+merge(d2,ads, by = "identifiers" )->PRE
+
+PRE$Dep_Anx<-PRE$`predict(lm.dep)` / PRE$`predict(lm.anx)`
+
+
+IQR(data$Bifidobacterium)
+#[1] 0.02700839
+data$bif_pres <- ifelse(data$Bifidobacterium >= 0.027 ,1,0)
+
+
+Imp.par <- preProcess(data, method = c("center","scale"))
+data.imp <- caret::predict(data,Imp.par)
+```
+
+
+```{r}
+######################################## Logistic Regression ###### Can Stress predict bif_pres? ###### link logit ######
+
+# glm models - stress as predictor
+fitCON <- glm(formula = bif_pres ~ Stress, family = binomial(), data = CON)
+summary(fitCON)
+fitPRE <- glm(formula = bif_pres ~ Stress, family = binomial(), data = PRE)
+summary(fitPRE)
+
+# plot glm models with fitted curve - stress as predictor
+## CON
+x <- seq(from = -2,to = 30,len=1000)
+y <- predict(fitCON,list(Stress = x),type="response")
+
+plot(CON$Stress, CON$bif_pres, pch = 16, main = "CON: Stress as Predictor of Bifidobacterium", xlab = "Stress", ylab = "Bifidobacterium")
+lines(x,y)
+
+### CON boxplot
+library(ggplot2)
+theme_set(theme_bw())
+g <- ggplot(CON, aes(x=factor(CON$bif_pres, levels=c(0, 1)), y=Stress))
+g + geom_boxplot() + 
+  geom_dotplot(binaxis='y', 
+               stackdir='center', 
+               dotsize = 1, 
+               fill="light blue") +
+  theme(axis.text.x = element_text(angle=65, vjust=0.6)) + 
+  labs(title="Fig 7. CON: Stress in Presence or Absence of Bifidobacterium", 
+       x="Bifidobacterium",
+       y="Stress Score")
+
+## PRE
+x <- seq(from = -2,to = 30,len=1000)
+y <- predict(fitPRE,list(Stress = x),type="response")
+
+plot(PRE$Stress, PRE$bif_pres, pch = 16, main = "PRE: Stress as Predictor of Bifidobacterium", xlab = "Stress", ylab = "Bifidobacterium")
+lines(x,y)
+
+### PRE boxplot
+library(ggplot2)
+theme_set(theme_bw())
+g <- ggplot(PRE, aes(x=factor(PRE$bif_pres, levels=c(0, 1)), y=Stress))
+g + geom_boxplot() + 
+  geom_dotplot(binaxis='y', 
+               stackdir='center', 
+               dotsize = 1, 
+               fill="light blue") +
+  theme(axis.text.x = element_text(angle=65, vjust=0.6)) + 
+  labs(title="Fig 8. PRE: Stress in Presence or Absence of Bifidobacterium", 
+       x="Bifidobacterium",
+       y="Stress Score")
+```
+
+
+
+```{r}
+######################################## Logistic Regression ###### Can Stress predict bif_pres? ###### link probit ######
+
+# glm models - stress as predictor
+fitCON <- glm(formula = bif_pres ~ Stress, family = binomial(link = "probit"), data = CON)
+summary(fitCON)
+fitPRE <- glm(formula = bif_pres ~ Stress, family = binomial(link = "probit"), data = PRE)
+summary(fitPRE)
+
+# plot glm models with fitted curve - stress as predictor
+## CON
+x <- seq(from = -2,to = 30,len=1000)
+y <- predict(fitCON,list(Stress = x),type="response")
+
+plot(CON$Stress, CON$bif_pres, pch = 16, main = "CON: Stress as Predictor of Bifidobacterium (probit)", xlab = "Stress", ylab = "Bifidobacterium")
+lines(x,y)
+
+## PRE
+x <- seq(from = -2,to = 30,len=1000)
+y <- predict(fitPRE,list(Stress = x),type="response")
+
+plot(PRE$Stress, PRE$bif_pres, pch = 16, main = "PRE: Stress as Predictor of Bifidobacterium (probit)", xlab = "Stress", ylab = "Bifidobacterium")
+lines(x,y)
+```
+
+```{r}
+#################### Logistic Regression #################### Can Dep_Anx predict bif_pres? ###############
+
+# glm models - Dep_Anx as predictor
+fitCON <- glm(formula = bif_pres ~ Dep_Anx, family = binomial(), data = CON)
+summary(fitCON)
+fitPRE <- glm(formula = bif_pres ~ Dep_Anx, family = binomial(), data = PRE)
+summary(fitPRE)
+
+# plot glm models with fitted curve - Dep_Anx as predictor
+## CON
+x <- seq(from = -2,to = 30,len=1000)
+y <- predict(fitCON,list(Dep_Anx = x),type="response")
+
+plot(CON$Dep_Anx, CON$bif_pres, pch = 16, main = "CON: Dep/Anx as Predictor of Bifidobacterium (probit)", xlab = "Dep/Anx", ylab = "Bifidobacterium")
+lines(x,y)
+
+## PRE
+x <- seq(from = -2,to = 30,len=1000)
+y <- predict(fitPRE,list(Dep_Anx = x),type="response")
+
+plot(PRE$Dep_Anx, PRE$bif_pres, pch = 16, main = "PRE: Dep/Anx as Predictor of Bifidobacterium", xlab = "Dep/Anx", ylab = "Bifidobacterium")
+lines(x,y)
+
+### CON boxplot
+library(ggplot2)
+theme_set(theme_bw())
+g <- ggplot(CON, aes(x=factor(CON$bif_pres, levels=c(0, 1)), y=Dep_Anx))
+g + geom_boxplot() + 
+  geom_dotplot(binaxis='y', 
+               stackdir='center', 
+               dotsize = 1, 
+               fill="light green") +
+  theme(axis.text.x = element_text(angle=65, vjust=0.6)) + 
+  labs(title="Fig 9. CON: Depression/Anxiey Ratio in Presence or Absence of Bifidobacterium", 
+       x="Bifidobacterium",
+       y="Depression/Anxiety")
+
+### PRE boxplot
+library(ggplot2)
+theme_set(theme_bw())
+g <- ggplot(PRE, aes(x=factor(PRE$bif_pres, levels=c(0, 1)), y=Dep_Anx))
+g + geom_boxplot() + 
+  geom_dotplot(binaxis='y', 
+               stackdir='center', 
+               dotsize = 1, 
+               fill="light green") +
+  theme(axis.text.x = element_text(angle=65, vjust=0.6)) + 
+  labs(title="Fig 10. PRE: Depression/Anxiety Ratio in Presence or Absence of Bifidobacterium", 
+       x="Bifidobacterium",
+       y="Depression/Anxiety")
+```
+
+
+```{r}
+#################### Logistic Regression #################### Can Dep_Anx predict bif_pres? ##### link probit ##########
+
+# glm models - Dep_Anx as predictor
+fitCON <- glm(formula = bif_pres ~ Dep_Anx, family = binomial(link = "probit"), data = CON)
+summary(fitCON)
+fitPRE <- glm(formula = bif_pres ~ Dep_Anx, family = binomial(link = "probit"), data = PRE)
+summary(fitPRE)
+
+# plot glm models with fitted curve - Dep_Anx as predictor
+## CON
+x <- seq(from = -2,to = 30,len=1000)
+y <- predict(fitCON,list(Dep_Anx = x),type="response")
+
+plot(CON$Dep_Anx, CON$bif_pres, pch = 16, main = "CON: Dep/Anx as Predictor of Bifidobacterium (probit)", xlab = "Dep/Anx", ylab = "Bifidobacterium")
+lines(x,y)
+
+## PRE
+x <- seq(from = -2,to = 30,len=1000)
+y <- predict(fitPRE,list(Dep_Anx = x),type="response")
+
+plot(PRE$Dep_Anx, PRE$bif_pres, pch = 16, main = "PRE: Dep/Anx as Predictor of Bifidobacterium (probit)", xlab = "Dep/Anx", ylab = "Bifidobacterium")
+lines(x,y)
+```
+
+
+```{r}
+#################### Logistic Regression #################### Can ERP response predict bif_pres? ################################
+
+# glm models - Neutral images, 6-8 s time window - as predictor
+fitCON <- glm(formula = bif_pres ~ neu_6_8, family = binomial(), data = CON)
+summary(fitCON)
+fitPRE <- glm(formula = bif_pres ~ neu_6_8, family = binomial(), data = PRE)
+summary(fitPRE)
+
+# plot glm models with fitted curve - neu_6_8 as predictor
+## CON
+x <- seq(from = -100,to = 150,len=1000)
+y <- predict(fitCON,list(neu_6_8 = x),type="response")
+
+plot(CON$neu_6_8, CON$bif_pres, pch = 16, main = "CON: ERP Response to Neutral Images, 6-8 s", xlab = "Microvolts", ylab = "Bifidobacterium")
+lines(x,y)
+
+## PRE
+x <- seq(from = -100,to = 150,len=1000)
+y <- predict(fitPRE,list(neu_6_8 = x),type="response")
+
+plot(PRE$neu_6_8, PRE$bif_pres, pch = 16, main = "PRE: ERP Response to Neutral Images, 6-8 s", xlab = "Microvolts", ylab = "Bifidobacterium")
+lines(x,y)
+
+### CON boxplot
+library(ggplot2)
+theme_set(theme_bw())
+g <- ggplot(CON, aes(x=factor(CON$bif_pres, levels=c(0, 1)), y=neu_6_8))
+g + geom_boxplot() + 
+  geom_dotplot(binaxis='y', 
+               stackdir='center', 
+               dotsize = 1, 
+               fill="blue") +
+  theme(axis.text.x = element_text(angle=65, vjust=0.6)) + 
+  labs(title="Fig 11. CON: Response to Neutral Images by Bifidobacterium Presence", 
+       x="Bifidobacterium",
+       y="Microvolts")
+
+### PRE boxplot
+library(ggplot2)
+theme_set(theme_bw())
+g <- ggplot(PRE, aes(x=factor(PRE$bif_pres, levels=c(0, 1)), y=neu_6_8))
+g + geom_boxplot() + 
+  geom_dotplot(binaxis='y', 
+               stackdir='center', 
+               dotsize = 1, 
+               fill="blue") +
+  theme(axis.text.x = element_text(angle=65, vjust=0.6)) + 
+  labs(title="Fig 12. PRE: Response to Neutral Images by Bifidobacterium Presence", 
+       x="Bifidobacterium",
+       y="Microvolts")
+```
+
+
+
+```{r}
+#################### Logistic Regression #################### Can ERP response predict bif_pres? ######## link probit ############
+
+# glm models - Neutral images, 6-8 s time window - as predictor
+fitCON <- glm(formula = bif_pres ~ neu_6_8, family = binomial(link = "probit"), data = CON)
+summary(fitCON)
+fitPRE <- glm(formula = bif_pres ~ neu_6_8, family = binomial(link = "probit"), data = PRE)
+summary(fitPRE)
+
+# plot glm models with fitted curve - neu_6_8 as predictor
+## CON
+x <- seq(from = -500,to = 500,len=1000)
+y <- predict(fitCON,list(neu_6_8 = x),type="response")
+
+plot(CON$neu_6_8, CON$bif_pres, pch = 16, main = "CON: ERP Response to Neutral Images, 6-8 s (probit)", xlab = "Microvolts", ylab = "Bifidobacterium")
+lines(x,y)
+
+## PRE
+x <- seq(from = -500,to = 500,len=1000)
+y <- predict(fitPRE,list(neu_6_8 = x),type="response")
+
+plot(PRE$neu_6_8, PRE$bif_pres, pch = 16, main = "PRE: ERP Response to Neutral Images, 6-8 s (probit)", xlab = "Microvolts", ylab = "Bifidobacterium")
+lines(x,y)
+```
+
+
+```{r}
+#################### Logistic Regression #################### Can ERP response predict bif_pres? ################################
+
+# glm models - Positive images, 6-8 s time window - as predictor
+fitCON <- glm(formula = bif_pres ~ pos_6_8, family = binomial(), data = CON)
+summary(fitCON)
+fitPRE <- glm(formula = bif_pres ~ pos_6_8, family = binomial(), data = PRE)
+summary(fitPRE)
+
+# plot glm models with fitted curve - neu_6_8 as predictor
+## CON
+x <- seq(from = -500,to = 500,len=1000)
+y <- predict(fitCON,list(pos_6_8 = x),type="response")
+
+plot(CON$pos_6_8, CON$bif_pres, pch = 16, main = "CON: ERP Response to Positive Images, 6-8 s", xlab = "Microvolts", ylab = "Bifidobacterium")
+lines(x,y)
+
+## PRE
+x <- seq(from = -500,to = 500,len=1000)
+y <- predict(fitPRE,list(pos_6_8 = x),type="response")
+
+plot(PRE$pos_6_8, PRE$bif_pres, pch = 16, main = "PRE: ERP Response to Positive Images, 6-8 s", xlab = "Microvolts", ylab = "Bifidobacterium")
+lines(x,y)
+
+### CON boxplot
+library(ggplot2)
+theme_set(theme_bw())
+g <- ggplot(CON, aes(x=factor(CON$bif_pres, levels=c(0, 1)), y=pos_6_8))
+g + geom_boxplot() + 
+  geom_dotplot(binaxis='y', 
+               stackdir='center', 
+               dotsize = 1, 
+               fill="gold") +
+  theme(axis.text.x = element_text(angle=65, vjust=0.6)) + 
+  labs(title="Fig 13. CON: Response to Positive Images by Bifidobacterium Presence", 
+       x="Bifidobacterium",
+       y="Microvolts")
+
+### PRE boxplot
+library(ggplot2)
+theme_set(theme_bw())
+g <- ggplot(PRE, aes(x=factor(PRE$bif_pres, levels=c(0, 1)), y=pos_6_8))
+g + geom_boxplot() + 
+  geom_dotplot(binaxis='y', 
+               stackdir='center', 
+               dotsize = 1, 
+               fill="gold") +
+  theme(axis.text.x = element_text(angle=65, vjust=0.6)) + 
+  labs(title="Fig 14. PRE: Response to Positive Images by Bifidobacterium Presence", 
+       x="Bifidobacterium",
+       y="Microvolts")
+```
+
+
+
+```{r}
+#################### Logistic Regression #################### Can ERP response predict bif_pres? ######### link probit ##########
+
+# glm models - Positive images, 6-8 s time window - as predictor
+fitCON <- glm(formula = bif_pres ~ pos_6_8, family = binomial(link = "probit"), data = CON)
+summary(fitCON)
+fitPRE <- glm(formula = bif_pres ~ pos_6_8, family = binomial(link = "probit"), data = PRE)
+summary(fitPRE)
+
+# plot glm models with fitted curve - neu_6_8 as predictor
+## CON
+x <- seq(from = -500,to = 500,len=1000)
+y <- predict(fitCON,list(pos_6_8 = x),type="response")
+
+plot(CON$pos_6_8, CON$bif_pres, pch = 16, main = "CON: ERP Response to Positive Images, 6-8 s (probit)", xlab = "Microvolts", ylab = "Bifidobacterium")
+lines(x,y)
+
+## PRE
+x <- seq(from = -500,to = 500,len=1000)
+y <- predict(fitPRE,list(pos_6_8 = x),type="response")
+
+plot(PRE$pos_6_8, PRE$bif_pres, pch = 16, main = "PRE: ERP Response to Positive Images, 6-8 s (probit)", xlab = "Microvolts", ylab = "Bifidobacterium")
+lines(x,y)
+```
+
+
+
+```{r}
+#################### Logistic Regression #################### Can ERP response predict bif_pres? ###################
+
+# glm models - Negative images, 6-8 s time window - as predictor
+fitCON <- glm(formula = bif_pres ~ neg_6_8, family = binomial(), data = CON)
+summary(fitCON)
+fitPRE <- glm(formula = bif_pres ~ neg_6_8, family = binomial(), data = PRE)
+summary(fitPRE)
+
+# plot glm models with fitted curve - neg_6_8 as predictor
+## CON
+x <- seq(from = -500,to = 500,len=1000)
+y <- predict(fitCON,list(neg_6_8 = x),type="response")
+
+plot(CON$neg_6_8, CON$bif_pres, pch = 16, main = "CON: ERP Response to Negative Images, 6-8 s", xlab = "Microvolts", ylab = "Bifidobacterium")
+lines(x,y)
+
+## PRE
+x <- seq(from = -500,to = 500,len=1000)
+y <- predict(fitPRE,list(neg_6_8 = x),type="response")
+
+plot(PRE$neg_6_8, PRE$bif_pres, pch = 16, main = "PRE: ERP Response to Negative Images, 6-8 s", xlab = "Microvolts", ylab = "Bifidobacterium")
+lines(x,y)
+
+### CON boxplot
+library(ggplot2)
+theme_set(theme_bw())
+g <- ggplot(CON, aes(x=factor(CON$bif_pres, levels=c(0, 1)), y=neg_6_8))
+g + geom_boxplot() + 
+  geom_dotplot(binaxis='y', 
+               stackdir='center', 
+               dotsize = 1, 
+               fill="red") +
+  theme(axis.text.x = element_text(angle=65, vjust=0.6)) + 
+  labs(title="Fig 15. CON: Response to Negative Images by Bifidobacterium Presence", 
+       x="Bifidobacterium",
+       y="Microvolts")
+
+### PRE boxplot
+library(ggplot2)
+theme_set(theme_bw())
+g <- ggplot(PRE, aes(x=factor(PRE$bif_pres, levels=c(0, 1)), y=neg_6_8))
+g + geom_boxplot() + 
+  geom_dotplot(binaxis='y', 
+               stackdir='center', 
+               dotsize = 1, 
+               fill="red") +
+  theme(axis.text.x = element_text(angle=65, vjust=0.6)) + 
+  labs(title="Fig 16. PRE: Response to Negative Images by Bifidobacterium Presence", 
+       x="Bifidobacterium",
+       y="Microvolts")
+```
+
+
+
+```{r}
+#################### Logistic Regression #################### Can ERP response predict bif_pres? ######### link probit ##########
+
+# glm models - Negative images, 6-8 s time window - as predictor
+fitCON <- glm(formula = bif_pres ~ neg_6_8, family = binomial(link = "probit"), data = CON)
+summary(fitCON)
+fitPRE <- glm(formula = bif_pres ~ neg_6_8, family = binomial(link = "probit"), data = PRE)
+summary(fitPRE)
+
+# plot glm models with fitted curve - neg_6_8 as predictor
+## CON
+x <- seq(from = -500,to = 500,len=1000)
+y <- predict(fitCON,list(neg_6_8 = x),type="response")
+
+plot(CON$neg_6_8, CON$bif_pres, pch = 16, main = "CON: ERP Response to Negative Images, 6-8 s (probit)", xlab = "Microvolts", ylab = "Bifidobacterium")
+lines(x,y)
+
+## PRE
+x <- seq(from = -500,to = 500,len=1000)
+y <- predict(fitPRE,list(neg_6_8 = x),type="response")
+
+plot(PRE$neg_6_8, PRE$bif_pres, pch = 16, main = "PRE: ERP Response to Negative Images, 6-8 s (probit)", xlab = "Microvolts", ylab = "Bifidobacterium")
+lines(x,y)
+```
+
